@@ -1,0 +1,35 @@
+{
+  "packId": "example.mypack",
+  "items": [
+    {
+      "id": "iron_mug",
+      "name": "Iron Mug",
+      "description": "A sturdy iron drinking mug.",
+      "model": "model__a1b2c3d4e5f60718.glb",
+      "clone": "Wooden Bowl",
+      "market": "Exclude",
+      "placement": "Sprite",
+      "category": "Junk",
+      "sound": "Metal",
+      "value": 4,
+      "bulk": 1.0,
+      "icon": {
+        "rotation": [20, 135, 0],
+        "zoom": 1.0,
+        "resolution": 512
+      }
+    },
+    {
+      "id": "familiar_bowl",
+      "name": "Familiar Bowl",
+      "description": "A renamed bowl using Silverpine's original visuals.",
+      "clone": "Wooden Bowl",
+      "useCloneVisuals": true,
+      "placement": "Sprite",
+      "category": "Junk",
+      "sound": "Wood",
+      "value": 2,
+      "bulk": 1.0
+    }
+  ]
+}

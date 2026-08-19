@@ -29,7 +29,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string PluginGuid = "renegadex.silverpine.customitemloader";
     public const string PluginName = "Custom Item Loader";
-    public const string PluginVersion = "2.8.1";
+    public const string PluginVersion = "2.9.0";
 
     internal static ManualLogSource Log = null!;
     internal static readonly Dictionary<string, Sprite> CustomSprites =
@@ -1318,7 +1318,7 @@ internal static class ItemPackLoader
         };
     }
 
-    private static bool TryLoadCachedSprite(
+    internal static bool TryLoadCachedSprite(
         PendingGlb pending,
         out Sprite sprite)
     {
@@ -1505,12 +1505,35 @@ internal static class ItemPackLoader
                     8)
                 .Replace("-", "")
                 .ToLowerInvariant();
-        string relative = "model__" + contentHash + ".glb";
+        Directory.CreateDirectory(Plugin.ModelSourceDirectory);
+        string suffix = "__" + contentHash + ".glb";
+        string readableStem = CreateReadableModelStem(
+            selectedPath,
+            contentHash);
+        foreach (string existing in Directory.GetFiles(
+                     Plugin.ModelSourceDirectory,
+                     "*" + suffix,
+                     SearchOption.TopDirectoryOnly))
+        {
+            byte[] existingHash;
+            using (SHA256 sha256 = SHA256.Create())
+            using (FileStream stream = File.OpenRead(existing))
+                existingHash = sha256.ComputeHash(stream);
+            if (!selectedHash.SequenceEqual(existingHash))
+                continue;
+            string existingName = Path.GetFileName(existing);
+            if (!existingName.Equals(
+                    "model" + suffix,
+                    StringComparison.OrdinalIgnoreCase) ||
+                readableStem.Equals("model", StringComparison.OrdinalIgnoreCase))
+                return existingName.Replace(Path.DirectorySeparatorChar, '/');
+        }
+
+        string relative = readableStem + suffix;
         string destination = ResolvePackPath(
             Plugin.ModelSourceDirectory,
             relative,
             requireExists: false);
-        Directory.CreateDirectory(Plugin.ModelSourceDirectory);
         if (File.Exists(destination))
         {
             byte[] existingHash;
@@ -1527,6 +1550,44 @@ internal static class ItemPackLoader
                 StringComparison.OrdinalIgnoreCase))
             File.Copy(selectedPath, destination, overwrite: false);
         return relative.Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    private static string CreateReadableModelStem(
+        string selectedPath,
+        string contentHash)
+    {
+        string source = Path.GetFileNameWithoutExtension(selectedPath).Trim();
+        string existingHashSuffix = "__" + contentHash;
+        if (source.EndsWith(
+                existingHashSuffix,
+                StringComparison.OrdinalIgnoreCase))
+            source = source.Substring(
+                0,
+                source.Length - existingHashSuffix.Length);
+        var builder = new StringBuilder(source.Length);
+        bool separatorPending = false;
+        foreach (char value in source)
+        {
+            if (char.IsLetterOrDigit(value))
+            {
+                if (separatorPending && builder.Length > 0)
+                    builder.Append('_');
+                builder.Append(char.ToLowerInvariant(value));
+                separatorPending = false;
+            }
+            else
+            {
+                separatorPending = builder.Length > 0;
+            }
+        }
+
+        string result = builder.ToString().Trim('_');
+        if (string.IsNullOrWhiteSpace(result))
+            result = "model";
+        const int MaximumReadableLength = 64;
+        if (result.Length > MaximumReadableLength)
+            result = result.Substring(0, MaximumReadableLength).TrimEnd('_');
+        return string.IsNullOrWhiteSpace(result) ? "model" : result;
     }
 
     private static string ResolvePackPath(

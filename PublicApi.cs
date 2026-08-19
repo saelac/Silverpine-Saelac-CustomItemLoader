@@ -17,7 +17,7 @@ namespace SilverpineMods.CustomItemLoader;
 /// </summary>
 public static class CustomItemApi
 {
-    public const int ApiVersion = 9;
+    public const int ApiVersion = 10;
     public const string GlbSpriteRendererVersion = "12";
 
     private static readonly object Sync = new();
@@ -280,6 +280,208 @@ public static class CustomItemApi
             throw new FileNotFoundException(
                 "The GLB model does not exist.",
                 path);
+        IconDefinition settings = CreateGlbSettings(
+            rotation,
+            zoom,
+            resolution);
+
+        string name = string.IsNullOrWhiteSpace(spriteName)
+            ? Path.GetFileNameWithoutExtension(path)
+            : spriteName.Trim();
+        return GlbThumbnailRenderer.RenderAsync(
+            path,
+            settings,
+            name);
+    }
+
+    /// <summary>
+    /// Imports a GLB into CIL's shared content-addressed authoring library and
+    /// returns the relative model reference stored in item-pack JSON.
+    /// </summary>
+    public static string ImportGlbModelSource(string sourcePath) =>
+        ItemPackLoader.ImportModelSource(sourcePath);
+
+    /// <summary>
+    /// Returns the GLB references currently available in CIL's shared model
+    /// authoring library, ordered by their readable stored filenames.
+    /// </summary>
+    public static IReadOnlyList<string> GetStoredGlbModelReferences()
+    {
+        if (string.IsNullOrWhiteSpace(Plugin.ModelSourceDirectory) ||
+            !Directory.Exists(Plugin.ModelSourceDirectory))
+            return Array.Empty<string>();
+        return Array.AsReadOnly(
+            Directory.GetFiles(
+                    Plugin.ModelSourceDirectory,
+                    "*.glb",
+                    SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileName)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToArray());
+    }
+
+    /// <summary>Reports whether a model reference exists in shared storage.</summary>
+    public static bool IsGlbModelSourceStored(string modelReference)
+    {
+        if (string.IsNullOrWhiteSpace(modelReference) ||
+            string.IsNullOrWhiteSpace(Plugin.ModelSourceDirectory))
+            return false;
+        try
+        {
+            string path = ItemPackLoader.ResolveModelSourcePath(
+                Plugin.ModelSourceDirectory,
+                modelReference.Trim(),
+                requireExists: false);
+            return File.Exists(path);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Resolves a shared CIL model reference. Legacy pack-relative GLBs remain
+    /// readable so editors can migrate them into shared authoring storage.
+    /// </summary>
+    public static string ResolveGlbModelSourcePath(
+        string packDirectory,
+        string modelReference,
+        bool requireExists = true)
+    {
+        if (string.IsNullOrWhiteSpace(packDirectory))
+            throw new ArgumentException(
+                "A pack directory is required.",
+                nameof(packDirectory));
+        if (string.IsNullOrWhiteSpace(modelReference))
+            throw new ArgumentException(
+                "A GLB model reference is required.",
+                nameof(modelReference));
+        return ItemPackLoader.ResolveModelSourcePath(
+            Path.GetFullPath(packDirectory),
+            modelReference.Trim(),
+            requireExists);
+    }
+
+    /// <summary>
+    /// Returns the deterministic distributable PNG path used for a GLB-derived
+    /// sprite owned by an item or add-on.
+    /// </summary>
+    public static string GetGlbSpriteCachePath(
+        string packDirectory,
+        string packId,
+        string itemId,
+        string cacheSuffix = "")
+    {
+        ValidateGlbCacheIdentity(packDirectory, packId, itemId);
+        return ItemPackLoader.GetGlbCachePath(
+            Path.GetFullPath(packDirectory),
+            packId.Trim(),
+            itemId.Trim(),
+            cacheSuffix ?? "");
+    }
+
+    /// <summary>
+    /// Loads CIL's deterministic cached PNG when it is valid for the source
+    /// model and render settings. When the authoring GLB is intentionally
+    /// absent, the PNG is authoritative, matching CIL's cache-only packs.
+    /// Consumers own the returned Sprite and Texture2D.
+    /// </summary>
+    public static bool TryLoadCachedGlbSprite(
+        string packDirectory,
+        string packId,
+        string itemId,
+        string modelReference,
+        Vector3 rotation,
+        float zoom,
+        int resolution,
+        string spriteName,
+        string cacheSuffix,
+        out Sprite sprite)
+    {
+        ValidateGlbCacheIdentity(packDirectory, packId, itemId);
+        IconDefinition settings = CreateGlbSettings(
+            rotation,
+            zoom,
+            resolution);
+        string modelPath = ResolveGlbModelSourcePath(
+            packDirectory,
+            modelReference,
+            requireExists: false);
+        PendingGlb pending = ItemPackLoader.CreatePendingGlb(
+            Path.GetFullPath(packDirectory),
+            packId.Trim(),
+            itemId.Trim(),
+            modelPath,
+            settings,
+            string.IsNullOrWhiteSpace(spriteName)
+                ? packId.Trim() + ":" + itemId.Trim()
+                : spriteName.Trim(),
+            cacheSuffix ?? "");
+        return ItemPackLoader.TryLoadCachedSprite(pending, out sprite);
+    }
+
+    /// <summary>
+    /// Renders one GLB view and writes the same keyed, distributable cache used
+    /// by native CIL items. Consumers own the returned Sprite and Texture2D.
+    /// </summary>
+    public static async Task<Sprite> RenderAndCacheGlbSpriteAsync(
+        string packDirectory,
+        string packId,
+        string itemId,
+        string modelReference,
+        Vector3 rotation,
+        float zoom,
+        int resolution,
+        string spriteName,
+        string cacheSuffix)
+    {
+        ValidateGlbCacheIdentity(packDirectory, packId, itemId);
+        IconDefinition settings = CreateGlbSettings(
+            rotation,
+            zoom,
+            resolution);
+        string modelPath = ResolveGlbModelSourcePath(
+            packDirectory,
+            modelReference,
+            requireExists: true);
+        string name = string.IsNullOrWhiteSpace(spriteName)
+            ? packId.Trim() + ":" + itemId.Trim()
+            : spriteName.Trim();
+        Sprite rendered = await GlbThumbnailRenderer.RenderAsync(
+            modelPath,
+            settings,
+            name);
+        try
+        {
+            PendingGlb pending = ItemPackLoader.CreatePendingGlb(
+                Path.GetFullPath(packDirectory),
+                packId.Trim(),
+                itemId.Trim(),
+                modelPath,
+                settings,
+                name,
+                cacheSuffix ?? "");
+            ItemPackLoader.WriteCachedSprite(pending, rendered);
+            return rendered;
+        }
+        catch
+        {
+            Texture2D texture = rendered.texture;
+            UnityEngine.Object.Destroy(rendered);
+            if (texture != null)
+                UnityEngine.Object.Destroy(texture);
+            throw;
+        }
+    }
+
+    private static IconDefinition CreateGlbSettings(
+        Vector3 rotation,
+        float zoom,
+        int resolution)
+    {
         if (float.IsNaN(rotation.x) || float.IsInfinity(rotation.x) ||
             float.IsNaN(rotation.y) || float.IsInfinity(rotation.y) ||
             float.IsNaN(rotation.z) || float.IsInfinity(rotation.z))
@@ -295,19 +497,31 @@ public static class CustomItemApi
             throw new ArgumentOutOfRangeException(
                 nameof(resolution),
                 "Resolution must be between 32 and 1024.");
+        return new IconDefinition
+        {
+            rotation = new[] { rotation.x, rotation.y, rotation.z },
+            zoom = zoom,
+            resolution = resolution
+        };
+    }
 
-        string name = string.IsNullOrWhiteSpace(spriteName)
-            ? Path.GetFileNameWithoutExtension(path)
-            : spriteName.Trim();
-        return GlbThumbnailRenderer.RenderAsync(
-            path,
-            new IconDefinition
-            {
-                rotation = new[] { rotation.x, rotation.y, rotation.z },
-                zoom = zoom,
-                resolution = resolution
-            },
-            name);
+    private static void ValidateGlbCacheIdentity(
+        string packDirectory,
+        string packId,
+        string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(packDirectory))
+            throw new ArgumentException(
+                "A pack directory is required.",
+                nameof(packDirectory));
+        if (string.IsNullOrWhiteSpace(packId))
+            throw new ArgumentException(
+                "A pack ID is required.",
+                nameof(packId));
+        if (string.IsNullOrWhiteSpace(itemId))
+            throw new ArgumentException(
+                "An item ID is required.",
+                nameof(itemId));
     }
 
     /// <summary>

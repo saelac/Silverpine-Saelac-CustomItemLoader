@@ -118,7 +118,7 @@ normalization does not alter the separate equipment text supplied to the LLM.
 
 ## API for crafting frameworks and other mods
 
-Custom Item Loader 2.8.1 exposes a public API in:
+Custom Item Loader 2.9.0 exposes a public API in:
 
 ```csharp
 using SilverpineMods.CustomItemLoader;
@@ -180,7 +180,7 @@ authors can rename them.
 
 | Member | Purpose |
 |---|---|
-| `CustomItemApi.ApiVersion` | Integer API compatibility level. Currently `9`. |
+| `CustomItemApi.ApiVersion` | Integer API compatibility level. Currently `10`. |
 | `CustomItemApi.GlbSpriteRendererVersion` | Cache compatibility identifier for the shared GLB-to-sprite renderer. |
 | `CustomItemApi.IsRegistrationComplete` | Reports whether the initial scan and the current startup's `Awake` slot-provider retries have finished. |
 | `CustomItemApi.GetRegisteredItems()` | Returns an immutable snapshot in registration order. |
@@ -191,6 +191,11 @@ authors can rename them.
 | `CustomItemApi.GetItemExtensionJson(id, property)` | Reads one add-on-owned JSON property from the item's registered source definition. |
 | `CustomItemApi.SetItemExtensionJson(ownerId, id, property, json)` | Atomically writes or removes one add-on-owned JSON property while preserving the rest of the CIL pack. |
 | `CustomItemApi.RenderGlbSpriteAsync(path, rotation, zoom, resolution, name)` | Renders one transparent, tightly cropped sprite from a GLB for add-on-owned visuals; no directional variants are generated. |
+| `CustomItemApi.ImportGlbModelSource(path)` | Imports a source GLB into CIL's shared, readable content-addressed authoring library and returns its JSON reference. |
+| `CustomItemApi.GetStoredGlbModelReferences()` | Lists shared authoring-library GLBs for add-on pickers. |
+| `CustomItemApi.ResolveGlbModelSourcePath(packFolder, reference, requireExists)` | Resolves shared model references while retaining legacy pack-relative compatibility. |
+| `CustomItemApi.TryLoadCachedGlbSprite(...)` | Loads CIL's keyed cache, including authoritative PNGs from cache-only distributed packs. |
+| `CustomItemApi.RenderAndCacheGlbSpriteAsync(...)` | Renders one view and writes the same deterministic distributable PNG/key pair used by CIL items. |
 | `CustomItemApi.WhenReady(callback)` | Race-free initial discovery callback. |
 | `CustomItemApi.ItemRegistered` | Raised after each template enters `ItemLibrary.Items`. |
 | `CustomItemApi.RegistrationCompleted` | Raised after the initial registry pass. |
@@ -337,7 +342,7 @@ BepInEx/config/
 │       └── images/
 │           └── painted_rock.png
 └── CustomItemLoaderModels/
-    └── model__a1b2c3d4e5f60718.glb
+    └── medieval_iron_mug__a1b2c3d4e5f60718.glb
 ```
 
 Any folder structure beneath `CustomItemLoader` is allowed. Every file ending
@@ -356,7 +361,7 @@ discarded.
       "id": "iron_mug",
       "name": "Iron Mug",
       "description": "A sturdy iron drinking mug.",
-      "model": "model__a1b2c3d4e5f60718.glb",
+      "model": "medieval_iron_mug__a1b2c3d4e5f60718.glb",
       "clone": "Wooden Bowl",
       "market": "Exclude",
       "placement": "GeneratedPrefab",
@@ -817,12 +822,15 @@ shared authoring-model library. Keep the original `model` value in JSON; it
 records that this is a GLB-derived item and determines which cache naming rules
 apply.
 
-The editor hashes the raw GLB bytes with SHA-256 and imports it as
-`model__<first-16-hash-characters>.glb`. If that destination already exists,
-the complete 256-bit hash is verified before it is reused. Identical GLBs are
-therefore stored once even when their original filenames differ. Each item still
-receives separate rendered caches because its angles, zoom, and resolution can
-differ.
+The editor keeps a sanitized form of the original model name, hashes the raw GLB
+bytes with SHA-256, and imports it as
+`<readable-name>__<first-16-hash-characters>.glb`. If a readable destination
+already exists, the complete 256-bit hash is verified before it is reused.
+Identical newly imported GLBs reuse an existing readable hash-suffixed entry.
+Legacy `model__<hash>.glb` files and their JSON references remain valid; a later
+import with a descriptive source filename may coexist with that legacy file so
+older packs are never broken automatically. Each item still receives separate
+rendered caches because its angles, zoom, and resolution can differ.
 
 On a consumer installation, the loader first checks the expected cache PNG. If
 the source GLB exists, its `.key` must still match the model contents and icon

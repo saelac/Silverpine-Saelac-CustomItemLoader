@@ -1322,8 +1322,9 @@ internal sealed class CustomItemEditorUI : ModToolBehaviour
                     value => item.icon.resolution = value));
             GUILayout.Label(
                 "GLBs are imported into BepInEx/config/CustomItemLoaderModels/" +
-                "as shared, content-addressed authoring sources outside every " +
-                "pack. Several items or packs can reference one model. " +
+                "as shared authoring sources with readable names plus a short " +
+                "content hash, outside every pack. Several items or packs can " +
+                "reference one model. " +
                 "Render GLB Preview " +
                 "writes distributable PNGs into the pack's .cache folder; " +
                 "cache-only installs use a static inventory image instead of " +

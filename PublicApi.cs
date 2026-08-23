@@ -17,7 +17,7 @@ namespace SilverpineMods.CustomItemLoader;
 /// </summary>
 public static class CustomItemApi
 {
-    public const int ApiVersion = 10;
+    public const int ApiVersion = 11;
     public const string GlbSpriteRendererVersion = "12";
 
     private static readonly object Sync = new();
@@ -567,6 +567,7 @@ public static class CustomItemApi
         float placementScale,
         CustomItemWorkbenchType workbenchType,
         CustomItemMarketBehavior marketBehavior,
+        bool repairMaterial,
         LightDefinition? light)
     {
         CustomItemSafety.RequireValid(
@@ -587,6 +588,7 @@ public static class CustomItemApi
                 placementScale,
                 workbenchType,
                 marketBehavior,
+                repairMaterial,
                 light,
                 ByQualifiedId.Count);
             ByQualifiedId.Add(qualifiedId, info);
@@ -754,6 +756,7 @@ public sealed class CustomItemInfo
         float placementScale,
         CustomItemWorkbenchType workbenchType,
         CustomItemMarketBehavior marketBehavior,
+        bool repairMaterial,
         LightDefinition? light,
         int registrationIndex)
     {
@@ -767,6 +770,7 @@ public sealed class CustomItemInfo
         PlacementScale = placementScale;
         WorkbenchType = workbenchType;
         MarketBehavior = marketBehavior;
+        IsRepairMaterial = repairMaterial;
         Light = light == null
             ? null
             : new CustomItemLightInfo(
@@ -802,6 +806,11 @@ public sealed class CustomItemInfo
     /// item. Automatic preserves the base game's sprite-key matching rule.
     /// </summary>
     public CustomItemMarketBehavior MarketBehavior { get; }
+    /// <summary>
+    /// Whether this item can fill a material slot at Silverpine's repair
+    /// bench, in addition to the base game's name-based ore choices.
+    /// </summary>
+    public bool IsRepairMaterial { get; }
     /// <summary>
     /// Optional Silverpine LightAttacher settings for the sprite-based
     /// WorldItem, or null when no area light is configured.

@@ -29,7 +29,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string PluginGuid = "renegadex.silverpine.customitemloader";
     public const string PluginName = "Custom Item Loader";
-    public const string PluginVersion = "2.9.0";
+    public const string PluginVersion = "2.9.1";
 
     internal static ManualLogSource Log = null!;
     internal static readonly Dictionary<string, Sprite> CustomSprites =
@@ -48,6 +48,8 @@ public sealed class Plugin : BaseUnityPlugin
         ArmorOverrides = new(StringComparer.OrdinalIgnoreCase);
     internal static readonly Dictionary<string, AttributeModifiersDefinition>
         AttributeModifiers = new(StringComparer.OrdinalIgnoreCase);
+    internal static readonly HashSet<string> RepairMaterialSpriteKeys =
+        new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, Sprite> ScaledPlacementSprites =
         new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> VisualFallbackWarnings =
@@ -1027,6 +1029,8 @@ internal static class ItemPackLoader
                     definition.placementScale);
                 Plugin.WorkbenchTypes.Add(spriteKey, workbenchType);
                 Plugin.LightSettings.Add(spriteKey, definition.light);
+                if (definition.repairMaterial)
+                    Plugin.RepairMaterialSpriteKeys.Add(spriteKey);
                 if (definition.componentOverrides?.armor != null)
                     Plugin.ArmorOverrides.Add(
                         spriteKey,
@@ -1067,6 +1071,7 @@ internal static class ItemPackLoader
                     definition.placementScale,
                     workbenchType,
                     marketBehavior,
+                    definition.repairMaterial,
                     definition.light);
                 DeferredItemKeys.Remove(
                     jsonPath + "|" + definitionId);
@@ -2135,6 +2140,7 @@ internal sealed class ItemDefinition
     public int value;
     public float bulk = 1f;
     public string? market = "Automatic";
+    public bool repairMaterial;
     public IconDefinition? icon;
     public string? placement = "Sprite";
     public float placementScale = 1f;

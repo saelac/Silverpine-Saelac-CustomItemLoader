@@ -7,9 +7,9 @@ recursively from:
 BepInEx/config/CustomItemLoader
 ```
 
-Each pack is a JSON file accompanied by its PNG, JPG, JPEG, or GLB assets.
-Asset paths are relative to the JSON file and cannot leave that pack's
-folder.
+Each pack is a JSON file accompanied by its PNG/JPG/JPEG assets and generated
+GLB cache PNGs. Source GLBs live in the shared
+`BepInEx/config/CustomItemLoaderModels` authoring library outside the packs.
 
 ## Requirements
 
@@ -42,7 +42,9 @@ From Silverpine's main menu:
 10. To make the item custom furniture, choose `GeneratedPrefab`, then configure
     its movement blocking, rotation, bed, workbench, and light options.
 11. Under `Game values`, choose whether the market board and crate should use
-    Silverpine's automatic herb/ore rule, always include the item, or exclude it.
+    Silverpine's automatic herb/ore rule, always include the item, or exclude
+    it. Enable `Repair material` when this item should be accepted by the
+    repair bench even though its name does not contain `ore`.
 12. Select `Save Pack`.
 13. Restart Silverpine to register the saved changes.
 
@@ -77,7 +79,7 @@ The editor supports:
 - Optional native visual inheritance from the selected clone, including its
   normal static icon or base-game 3D inventory display
 - Inherited, base-game, disabled, and mod-registered equipment-slot selection
-- Category, sound, value, bulk, market participation, placement,
+- Category, sound, value, bulk, market and repair-material participation, placement,
   placed-sprite scale, workbench interaction, and lantern-style area-light
   controls
 - Generated furniture prefabs with directional image or GLB rotation sprites,
@@ -118,7 +120,7 @@ normalization does not alter the separate equipment text supplied to the LLM.
 
 ## API for crafting frameworks and other mods
 
-Custom Item Loader 2.9.0 exposes a public API in:
+Custom Item Loader 2.9.1 exposes a public API in:
 
 ```csharp
 using SilverpineMods.CustomItemLoader;
@@ -180,7 +182,7 @@ authors can rename them.
 
 | Member | Purpose |
 |---|---|
-| `CustomItemApi.ApiVersion` | Integer API compatibility level. Currently `10`. |
+| `CustomItemApi.ApiVersion` | Integer API compatibility level. Currently `11`. |
 | `CustomItemApi.GlbSpriteRendererVersion` | Cache compatibility identifier for the shared GLB-to-sprite renderer. |
 | `CustomItemApi.IsRegistrationComplete` | Reports whether the initial scan and the current startup's `Awake` slot-provider retries have finished. |
 | `CustomItemApi.GetRegisteredItems()` | Returns an immutable snapshot in registration order. |
@@ -200,6 +202,7 @@ authors can rename them.
 | `CustomItemApi.ItemRegistered` | Raised after each template enters `ItemLibrary.Items`. |
 | `CustomItemApi.RegistrationCompleted` | Raised after the initial registry pass. |
 | `CustomItemApi.SpriteReady` | Raised when a deferred GLB render replaces its fallback sprite. |
+| `CustomItemInfo.IsRepairMaterial` | Reports whether the item's `repairMaterial` option extends the repair bench's native ore filter. |
 
 The extension JSON methods are intended for dedicated add-on editors. They
 resolve items through CIL's stable qualified IDs and source paths, reject CIL
@@ -453,6 +456,7 @@ style value such as `author.packname` is recommended.
 | `componentOverrides` | object | No | — | Explicit gameplay-value overrides for supported components inherited through `clone`. See below. |
 | `attributeModifiers` | object | No | — | Bonuses applied while an equipable armor, clothing, melee-weapon, or ranged-weapon clone is equipped. Optional providers may register additional numeric fields. See below. |
 | `market` | string | No | `Automatic` | Market board/crate behavior: `Automatic` preserves Silverpine's sprite-key rule, `Include` always adds the custom item, and `Exclude` always removes it. |
+| `repairMaterial` | boolean | No | `false` | Allows this custom item to fill a repair-bench material slot in addition to Silverpine's native items whose display names contain `ore`. |
 | `category` | string | No | `Miscellaneous` | One of the base-game category values below. `Furniture` requires `GeneratedPrefab`, or `ClonedPrefab` with a pickupable furniture clone, because Silverpine's vendor restock treats every furniture item as pickupable. |
 | `sound` | string | No | `None` | One of the base-game sound values below. |
 | `value` | integer | No | `0` | Base gold value. Must be zero or greater. |
@@ -480,6 +484,34 @@ market board or be accepted by the market crate. Use `market: "Include"` for
 any other custom item that should participate. Explicit choices are reconciled
 when a market is initialized or restored, so they also correct the saved market
 list in an existing save after the game is restarted.
+
+### Repair materials
+
+Silverpine's repair bench normally offers four material slots and accepts an
+item in those slots only when its display name contains `ore`. Set
+`repairMaterial` to `true` to extend that filter for a custom ingot, scrap,
+gem, or other repair resource:
+
+```json
+{
+  "id": "chromium_ingot",
+  "name": "Chromium Ingot",
+  "repairMaterial": true,
+  "value": 12
+}
+```
+
+The toggle preserves the native repair calculation. Selected materials
+contribute their final gold values, including inherited quality/value
+multipliers. The required combined value is half of the damaged item's repair
+value multiplied by its missing-durability fraction, rounded to an integer and
+capped at 160. Meeting the requirement consumes the damaged item and selected
+materials, returns a fully repaired clone, and advances 60 work minutes.
+
+This is a general material-participation toggle, not a per-tool recipe. A
+Chromium Ingot enabled this way can repair any otherwise repairable tool,
+weapon, or repairable clothing item, and ordinary `ore`-named items remain
+accepted.
 
 ### Generated furniture options
 

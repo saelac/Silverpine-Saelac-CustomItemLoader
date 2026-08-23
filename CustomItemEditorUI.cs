@@ -418,6 +418,14 @@ internal sealed class CustomItemEditorUI : ModToolBehaviour
                     value => item.market = value),
                 () => GUILayout.Label(GetMarketBehaviorDescription(
                     item.market)));
+            DrawColumnPair(
+                () => DrawBool(
+                    "Repair material",
+                    item.repairMaterial,
+                    value => item.repairMaterial = value),
+                () => GUILayout.Label(
+                    "Lets this item fill Silverpine's repair-bench material slots. " +
+                    "Its final gold value determines how much repair value it provides."));
         }
 
         GUILayout.Space(8);
@@ -2017,6 +2025,7 @@ internal sealed class CustomItemEditorUI : ModToolBehaviour
         category = nameof(ItemCategory.Miscellaneous),
         sound = nameof(ItemSound.None),
         market = nameof(CustomItemMarketBehavior.Automatic),
+        repairMaterial = false,
         placement = nameof(PlacementMode.Sprite),
         placementScale = 1f,
         workbench = nameof(CustomItemWorkbenchType.None),
